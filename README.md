@@ -147,38 +147,50 @@ Esta documentação fornece um guia passo a passo para a instalação de um serv
     SERVICES=("httpd" "nfs-server")
     NFS_PATH="/home/jefferson/server-nfs/logs"
     LOG_FILE="/var/log/service_monitor.log"
+    ONLINE_FILE="$NFS_PATH/service_online.txt"
+    OFFLINE_FILE="$NFS_PATH/service_offline.txt"
 
     # Função para logar mensagens com timestamp atualizado
     log_message() {
-    local message="$1"
-    local timestamp=$(date +"%Y-%m-%d %H:%M:%S")
-    echo "$timestamp - $message" >> "$LOG_FILE"
+        local message="$1"
+        local timestamp=$(date +"%Y-%m-%d %H:%M:%S")
+        echo "$timestamp - $message" >> "$LOG_FILE"
     }
 
     # Verifica se o diretório de montagem existe; caso contrário, tenta criar
     if [ ! -d "$NFS_PATH" ]; then
-    log_message "Diretório $NFS_PATH não existe. Tentando criar..."
-    mkdir -p "$NFS_PATH" && \
-    log_message "Diretório $NFS_PATH criado com sucesso." || \
-    { log_message "Não foi possível criar o diretório $NFS_PATH. Abortando."; exit 1; }
+        log_message "Diretório $NFS_PATH não existe. Tentando criar..."
+        if mkdir -p "$NFS_PATH"; then
+            log_message "Diretório $NFS_PATH criado com sucesso."
+        else
+            log_message "Não foi possível criar o diretório $NFS_PATH. Abortando."
+            exit 1
+        fi
     fi
 
     # Monitoramento dos serviços
     for SERVICE_NAME in "${SERVICES[@]}"; do
-    STATUS_FILE="$NFS_PATH/${SERVICE_NAME}.txt"
+        TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
+        if systemctl is-active --quiet "$SERVICE_NAME"; then
+            STATUS="ONLINE"
+            MESSAGE="O serviço $SERVICE_NAME está ONLINE."
+            OUTPUT_FILE="$ONLINE_FILE"
+        else
+            STATUS="OFFLINE"
+            MESSAGE="O serviço $SERVICE_NAME está OFFLINE."
+            OUTPUT_FILE="$OFFLINE_FILE"
+        fi
 
-    if systemctl is-active --quiet "$SERVICE_NAME"; then
-        STATUS="ONLINE"
-        MESSAGE="O serviço $SERVICE_NAME está ONLINE."
-    else
-        STATUS="OFFLINE"
-        MESSAGE="O serviço $SERVICE_NAME está OFFLINE."
-    fi
+        # Adiciona a informação ao arquivo de status apropriado
+        echo "$TIMESTAMP - Serviço: $SERVICE_NAME - Status: $STATUS - Mensagem: $MESSAGE" >> "$OUTPUT_FILE"
 
-    # Grava o resultado em um arquivo específico para o serviço
-    echo "$(date +"%Y-%m-%d %H:%M:%S") - $MESSAGE" >> "$STATUS_FILE"
-    log_message "Resultado para o serviço $SERVICE_NAME gravado em $STATUS_FILE."
+        # Grava a mensagem no log principal
+        log_message "$MESSAGE"
     done
+
+    # Registra no log principal que as listas foram atualizadas
+    log_message "Lista de serviços ONLINE atualizada em $ONLINE_FILE."
+    log_message "Lista de serviços OFFLINE atualizada em $OFFLINE_FILE."
     ```
 
 2. **Torne o script executável e configure o cron:**
